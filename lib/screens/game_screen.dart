@@ -10,6 +10,63 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
+  static const trumpShapeOrder = ['S', 'D', 'C', 'H'];
+
+  String firstShape = '';
+
+  int decideWinner(String trumpShape, List<String> cardsPlayed) {
+    final String firstCardShape = cardsPlayed[0].substring(1);
+
+    final List<String> trumpShapeCards =
+        cardsPlayed.where((card) => card.substring(1) == trumpShape).toList();
+
+    final List<String> firstCardShapeCards = cardsPlayed
+        .where((card) => card.substring(1) == firstCardShape)
+        .toList();
+
+    if (trumpShapeCards.isNotEmpty) {
+      final String highestTrumpShapeCard = trumpShapeCards.reduce((a, b) {
+        if (a.contains('A')) return a;
+        if (b.contains('A')) return b;
+        if (playingCards.indexOf(a) > playingCards.indexOf(b)) {
+          return a;
+        } else {
+          return b;
+        }
+      });
+      return cardsPlayed.indexOf(highestTrumpShapeCard) + 1;
+    } else {
+      final String highestFirstCardShapeCard =
+          firstCardShapeCards.reduce((a, b) {
+        if (a.contains('A')) return a;
+        if (b.contains('A')) return b;
+        if (playingCards.indexOf(a) > playingCards.indexOf(b)) {
+          return a;
+        } else {
+          return b;
+        }
+      });
+      return cardsPlayed.indexOf(highestFirstCardShapeCard) + 1;
+    }
+  }
+
+  bool isValidMove(
+    String playedCard,
+    String firstMoveShape,
+    List<String> playerCards,
+  ) {
+    if (currentRoundCards.isEmpty) {
+      return true;
+    }
+    if (playedCard.contains(firstMoveShape)) {
+      return true;
+    }
+    if (playerCards.any((card) => card.contains(firstMoveShape))) {
+      return false;
+    }
+    return true;
+  }
+
   static const playingCards = [
     'AC',
     '2C',
@@ -107,14 +164,52 @@ class _GameScreenState extends State<GameScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // need to display the round results
-          print(roundResults);
+          // need to display the round results in a modal
+          showModalBottomSheet(
+            context: context,
+            builder: (context) {
+              return SizedBox(
+                height: 300,
+                child: ListView.builder(
+                  itemCount: roundResults.length,
+                  itemBuilder: (context, index) {
+                    return Card(
+                      child: ListTile(
+                        title: Text(
+                          roundResults[index]['cards'].join(' '),
+                        ),
+                        subtitle: Text(
+                          'Winner: ${roundResults[index]['winner']}',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
         },
         child: const Icon(Icons.view_array),
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
+          // Text to display first shape
+          Text(
+            firstShape.isEmpty
+                ? 'First Shape: Not Played'
+                : 'First Shape: $firstShape',
+          ),
+
+          // Display current round's trump shape
+          Text(
+            'Trump Shape: ${trumpShapeOrder[rounds % 4]}',
+          ),
+
+          // Display the cards played in the current round
+          Text(
+            'Cards Played: ${currentRoundCards.join(' ')}',
+          ),
           rounds != noOfRounds
               ? Expanded(
                   child: ListView.builder(
@@ -127,12 +222,43 @@ class _GameScreenState extends State<GameScreen> {
                               String playedCard =
                                   distributedCards[currentPlayer][index];
 
+                              if (!isValidMove(playedCard, firstShape,
+                                  distributedCards[currentPlayer])) {
+                                // show some alert
+                                showDialog(
+                                  context: context,
+                                  builder: (context) {
+                                    return AlertDialog(
+                                      title: const Text('Invalid Move'),
+                                      content: const Text(
+                                          'You must play the same shape as the first card played'),
+                                      actions: <Widget>[
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                          },
+                                          child: const Text('OK'),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
+                                return;
+                              }
+
                               distributedCards[currentPlayer].removeAt(index);
 
                               currentRoundCards.add(playedCard);
 
+                              if (firstShape.isEmpty) {
+                                firstShape = playedCard.substring(1, 2);
+                              }
+
                               if (currentRoundCards.length == 4) {
-                                int roundWinner = 2;
+                                int roundWinner = decideWinner(
+                                  trumpShapeOrder[rounds % 4],
+                                  List.from(currentRoundCards),
+                                );
 
                                 roundResults.add({
                                   'cards': List.from(currentRoundCards),
@@ -140,6 +266,7 @@ class _GameScreenState extends State<GameScreen> {
                                 });
 
                                 currentRoundCards.clear();
+                                firstShape = '';
                                 rounds++;
                               }
 
